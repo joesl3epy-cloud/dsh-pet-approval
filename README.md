@@ -198,6 +198,10 @@ node node_modules/dsh-pet-approval/check.mjs       # 端到端自检
   打一条 `PetSprite shape changed; card stays visual-only` 并退化成不接管鼠标的静态卡片；
   卡片挂不上时审批仍在 GUI 里完成，不会卡死。
 - dsh-pet 大改渲染层时需要更新补丁逻辑；补丁本身可卸载、不阻塞 dsh-pet 升级。
+- **高风险卡片的「查看」只把 DSH 窗口激活到前台，不会跳到那条会话。** 插件宿主进程里拿不到
+  Electron 窗口（`import('electron')` 必然失败，日志记 `focus dsh: electron gave no window`），
+  只能退回 `osascript` 激活应用；而定位会话依赖的 `[data-session-id]` 在 DSH 前端并不存在。
+  高风险请求仍请到 DSH 对话框里处理，「查看」的作用只是帮你把窗口调出来。
 - 只在 macOS 上实测过（见下）。Windows/Linux 未测试，不宣称兼容。
 
 ## 测试
