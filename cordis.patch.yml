@@ -1,0 +1,4 @@
+- insert:
+    - id: pet-approval
+      name: dsh-pet-approval
+      config: {}

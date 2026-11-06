@@ -1,0 +1,66 @@
+{
+  "name": "dsh-pet-approval",
+  "version": "0.3.1",
+  "description": "把 DSH 的权限审批搬到 dsh-pet 桌宠气泡上（拒绝 / 允许一次），与 DSH 对话框两边都能点、谁先点算谁的",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./patch": "./patch.mjs",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "patch.mjs",
+    "install.mjs",
+    "uninstall.mjs",
+    "check.mjs",
+    "cordis.patch.yml",
+    "runtime/",
+    "test/",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test test/",
+    "check": "node check.mjs",
+    "patch-runtime": "node install.mjs",
+    "unpatch-runtime": "node uninstall.mjs"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "dsh-plugin",
+    "dsh-pet",
+    "approval",
+    "permission",
+    "desktop-pet",
+    "electron"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "peerDependencies": {
+    "dsh-pet": ">=0.3.7"
+  },
+  "peerDependenciesMeta": {
+    "dsh-pet": {
+      "optional": true
+    }
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/joesl3epy-cloud/dsh-pet-approval.git"
+  },
+  "homepage": "https://github.com/joesl3epy-cloud/dsh-pet-approval#readme",
+  "bugs": {
+    "url": "https://github.com/joesl3epy-cloud/dsh-pet-approval/issues"
+  },
+  "author": "Jankin"
+}
