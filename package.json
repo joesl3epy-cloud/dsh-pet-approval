@@ -22,7 +22,7 @@
     "README.md"
   ],
   "scripts": {
-    "test": "node --test test/",
+    "test": "node --test test/*.test.mjs",
     "check": "node check.mjs",
     "patch-runtime": "node install.mjs",
     "unpatch-runtime": "node uninstall.mjs"
