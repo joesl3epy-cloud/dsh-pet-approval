@@ -30,18 +30,19 @@ import fs from 'node:fs'
 import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
+import { installNavigation, requestNavigation } from './navigation.mjs'
 import { execFile } from 'node:child_process'
 import { ensureRuntimePatch, newToken, resolveDshHome, resolveProfile } from './patch.mjs'
 
 const name = 'dsh-pet-approval'
-const inject = []
+const inject = ['webServer']
 
 const { version: VERSION } = JSON.parse(fs.readFileSync(new URL('./package.json', import.meta.url), 'utf8'))
 
 /** 回环端口候选：渲染端按同样顺序探测。 */
 const PORTS = [49395, 49396, 49397, 49398, 49399, 49400]
 /** 卡片样式/文案版本：runtime/pet-approval.js 里的 UI_VERSION 必须与之一致，否则宠物窗口自动刷新。 */
-const UI_VERSION = '12'
+const UI_VERSION = '13'
 const OUTCOMES = new Set(['allowed-once', 'rejected', 'cancelled', 'unavailable'])
 
 /** 渲染端心跳窗口：超过这么久没轮询就认为桌宠不在线（只走 GUI）。
@@ -103,6 +104,7 @@ function assessRisk(item) {
 }
 
 function publicItem(item) {
+  if (item.navigation?.status === 'pending' && item.navigation.expires <= Date.now()) item.navigation.status = 'failed'
   return {
     id: item.id,
     toolName: item.toolName,
@@ -111,6 +113,7 @@ function publicItem(item) {
     risk: assessRisk(item),
     // 已经点过「查看」、把决定权交回对话框了：卡片留着显示这个状态，不再给按钮
     viewed: item.viewed === true,
+    navigationStatus: item.navigation?.status || 'idle',
   }
 }
 
@@ -121,64 +124,11 @@ function publicItem(item) {
  * 所以切会话只能靠 Electron 主进程里的 BrowserWindow + 在页面里点侧栏那一项；拿不到就退化成
  * `open -a "DeepSeek Harness"` 只激活窗口。失败一律不影响审批链。
  */
-async function focusDsh(sessionId) {
-  let focused = false
-  try {
-    // 插件宿主未必暴露 Electron 通道：import('electron') 可能挂住，所以限时 1.5 秒。
-    const electron = await Promise.race([
-      import('electron'),
-      new Promise((resolve) => setTimeout(() => resolve(null), 1500)),
-    ])
-    const app = electron && electron.app
-    const BrowserWindow = electron && electron.BrowserWindow
-    if (app && typeof app.focus === 'function') app.focus({ steal: true })
-    const windows = BrowserWindow && typeof BrowserWindow.getAllWindows === 'function' ? BrowserWindow.getAllWindows() : []
-    for (const win of windows) {
-      if (!win || win.isDestroyed()) continue
-      if (win.show) win.show()
-      if (win.focus) win.focus()
-      focused = true
-      if (sessionId && win.webContents && typeof win.webContents.executeJavaScript === 'function') {
-        const script = `(() => {
-          const id = ${JSON.stringify(String(sessionId))}
-          const nodes = document.querySelectorAll('[data-session-id]')
-          for (const node of nodes) {
-            if (node.getAttribute('data-session-id') === id) { node.click(); return 'clicked:' + nodes.length }
-          }
-          return 'no-match:' + nodes.length
-        })()`
-        const result = await Promise.race([
-          win.webContents.executeJavaScript(script, true),
-          new Promise((resolve) => setTimeout(() => resolve('timeout'), 1500)),
-        ])
-        log(`focus dsh session=${sessionId} -> ${result}`)
-      }
-      break
-    }
-    if (!focused) log(`focus dsh: electron gave no window (session=${sessionId || '-'})`)
-  } catch (error) {
-    log(`focus via electron failed: ${error && error.message ? error.message : error}`)
-  }
-  if (focused) return true
-  try {
-    // open -a 只是激活 app；osascript activate 会把主窗口顶到最前，失败再退回 open -a
-    const child = execFile(
-      'osascript',
-      ['-e', 'tell application "DeepSeek Harness" to activate'],
-      { timeout: 5000 },
-      (error) => {
-        if (error) {
-          log(`focus dsh: osascript failed (${error.message}), trying open -a`)
-          execFile('open', ['-a', 'DeepSeek Harness'], { timeout: 5000 }, () => {})
-        }
-      },
-    )
-    if (child && child.on) child.on('error', () => {})
-    log(`focus dsh: activate via osascript (session=${sessionId || '-'})`)
-  } catch (error) {
-    log(`focus dsh: activate threw ${error && error.message ? error.message : error}`)
-  }
-  return false
+async function focusDsh() {
+  if (process.platform !== 'darwin') return false
+  return new Promise(resolve => {
+    execFile('osascript', ['-e', 'tell application "DeepSeek Harness" to activate'], {timeout:5000}, error => resolve(!error))
+  })
 }
 
 /* ------------------------------------------------------------------ *
@@ -545,12 +495,16 @@ async function handleHttp(state, req, res) {
         return
       }
       if (outcome === 'view') {
+        if (!state.navigationReady) { send(res, 503, {ok:false,error:'navigation-unavailable'}); return }
         // 高风险「查看」：卡片原地转成"已转去对话框"并留着，真正的批准/拒绝仍然回 DSH 对话框做。
         state.lastPollAt = Date.now()
-        item.viewed = true
+        if (!requestNavigation(item)) {
+          send(res, 409, {ok:false,error:'missing-session'}); return
+        }
+        item.viewed = false
         log(`view id=${id} risk=${assessRisk(item)}`)
-        focusDsh(item.sessionId)
-        send(res, 200, { ok: true, action: 'view' })
+        void focusDsh().catch(() => {})
+        send(res, 200, { ok: true, action: 'view', navigation: 'pending' })
         return
       }
       if (outcome !== 'allowed-once' && outcome !== 'rejected') {
@@ -654,6 +608,8 @@ function apply(ctx, config) {
   } catch (error) {
     log(`runtime patch failed: ${error && error.message ? error.message : error}`)
   }
+
+  state.navigationReady = installNavigation(ctx, state)
 
   // 2) 挂审批瀑布（prepend：抢在 remote 转发之前注册，先走我们的双通道）
   const handler = makeApprovalHandler(state)

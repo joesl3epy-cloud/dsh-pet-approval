@@ -22,7 +22,7 @@
   var POLL_MS = 300
   var TIMEOUT_MS = 1500
   /** 卡片样式/文案版本：host 的 /health 里带同一个值，不一致就自动刷新窗口（改 UI 不用重启桌宠）。 */
-  var UI_VERSION = '12'
+  var UI_VERSION = '13'
 
   var port = null
   var discovering = null
@@ -156,10 +156,10 @@
     /* 审批期间把普通说话气泡让开，别两坨叠在一起 */
     '.pet-sprite:has(.dpa-card) .pet-bubble{opacity:0 !important;visibility:hidden !important;}',
     '.dpa-tip{font-weight:600;white-space:nowrap;}',
-    '.dpa-actions{display:flex;align-items:center;gap:calc(var(--pet-size,462px) * .012);}',
+    '.dpa-actions{flex-shrink:0;display:flex;align-items:center;gap:calc(var(--pet-size,462px) * .012);}',
     '.dpa-btn{pointer-events:auto;cursor:pointer;border:none;border-radius:999px;',
     'padding:calc(var(--pet-size,462px) * .010) calc(var(--pet-size,462px) * .026);',
-    'font-size:calc(var(--pet-size,462px) * .031);font-family:inherit;line-height:1.35;transition:filter .15s ease;}',
+    'white-space:nowrap;flex-shrink:0;font-size:calc(var(--pet-size,462px) * .031);font-family:inherit;line-height:1.35;transition:filter .15s ease;}',
     '.dpa-btn:hover{filter:brightness(.94);}',
     /* 点下去立刻给反馈：按钮禁用 + 卡片压暗，等主机确认后由轮询收卡 */
     '.dpa-btn:disabled{cursor:default;filter:grayscale(.35);opacity:.55;}',
@@ -223,8 +223,7 @@
     el.innerHTML =
       '<span class="dpa-tip"></span>' +
       '<div class="dpa-actions">' +
-      '<button type="button" class="dpa-btn dpa-deny" data-outcome="rejected">拒绝</button>' +
-      '<button type="button" class="dpa-btn dpa-allow" data-outcome="allowed-once">批准</button>' +
+      '<button type="button" class="dpa-btn dpa-allow" data-outcome="allowed-once">允许</button>' +
       '</div>'
     el.addEventListener('pointerdown', function (e) {
       e.stopPropagation()
@@ -273,7 +272,7 @@
     var el = ensureCard()
     if (!el) return
     /* 状态串：同一条审批从"待办"转成"已转去对话框"时也要重画，所以不能只看 id */
-    var state = item.id + '|' + (item.viewed ? 'v' : '') + '|' + more
+    var state = item.id + '|' + (item.viewed ? 'v' : '') + '|' + more + '|' + (item.navigationStatus || 'idle')
     if (state === cardState) return
     cardState = state
     /* 状态换了就是另一条审批/另一种形态：上一轮的"已提交"反馈必须复位，
@@ -281,15 +280,15 @@
     clearBusy()
     cardId = item.id
     var viewed = item.viewed === true
-    var high = item.risk === 'high' && !viewed
+    var high = item.risk === 'high'
     el.classList.toggle('is-high', high)
     el.classList.toggle('is-viewed', viewed)
     var tipEl = el.querySelector('.dpa-tip')
     if (tipEl) {
       tipEl.textContent = viewed
-        ? '已转去对话框'
+        ? '请在 DSH 审批'
         : high
-          ? '高风险 · 需确认'
+          ? (item.navigationStatus === 'pending' ? '正在打开…' : item.navigationStatus === 'failed' ? '未能定位 · 请重试' : '需在 DSH 确认')
           : more > 0
             ? '需要授权 +' + more
             : '需要授权'
@@ -297,20 +296,16 @@
     var actions = el.querySelector('.dpa-actions')
     if (actions) {
       /* 用 data-state 记住当前按钮组合，避免每次轮询都重写 innerHTML（会打断按下态） */
-      var wantState = viewed ? 'viewed' : high ? 'high' : 'normal'
+      var wantState = high ? 'high' : 'normal'
       if (actions.getAttribute('data-state') !== wantState) {
         actions.setAttribute('data-state', wantState)
-        actions.innerHTML = viewed
-          ? '<span class="dpa-dots">⏳</span>'
-          : high
-            ? '<button type="button" class="dpa-btn dpa-deny" data-outcome="rejected">拒绝</button>' +
-              '<button type="button" class="dpa-btn dpa-view" data-outcome="view">查看</button>'
-            : '<button type="button" class="dpa-btn dpa-deny" data-outcome="rejected">拒绝</button>' +
-              '<button type="button" class="dpa-btn dpa-allow" data-outcome="allowed-once">批准</button>'
+        actions.innerHTML = high
+            ? '<button type="button" class="dpa-btn dpa-view" data-outcome="view">查看</button>'
+            : '<button type="button" class="dpa-btn dpa-allow" data-outcome="allowed-once">允许</button>'
       }
     }
     /* 细节不占视觉：鼠标悬停时在系统提示里看工具名和理由 */
-    el.title = (item.toolName || 'tool') + (item.reason ? ' · ' + summarize(item.reason) : '')
+    el.title = (item.toolName || 'tool') + (item.reason ? ' · ' + String(item.reason) : '')
     refreshSprites()
     reportSeen(item.id)
   }
