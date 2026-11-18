@@ -2,9 +2,9 @@
 
 在其他窗口工作时，也能从常驻桌宠上处理 DSH 的权限请求：**普通请求点「允许」，高风险点「查看」回 DSH 手动审批。**
 
-**Jolyon · v1.0.0 · macOS · 非官方插件 · AI 辅助开发**
+**Jolyon · 1.0 · macOS · 非官方插件 · AI 辅助开发**
 
-[下载 v1.0.0](https://github.com/joesl3epy-cloud/dsh-pet-approval/releases/tag/v1.0.0) · [版本记录](./CHANGELOG.md) · [反馈问题](https://github.com/joesl3epy-cloud/dsh-pet-approval/issues) · [配套工具：隐藏侧栏时间](https://github.com/joesl3epy-cloud/dsh-hide-time)
+[下载 1.0](https://github.com/joesl3epy-cloud/dsh-pet-approval/releases/tag/v1.0.0) · [版本记录](./CHANGELOG.md) · [反馈问题](https://github.com/joesl3epy-cloud/dsh-pet-approval/issues) · [配套工具：隐藏侧栏时间](https://github.com/joesl3epy-cloud/dsh-hide-time)
 
 ## 实际演示
 
