@@ -4,7 +4,7 @@
  * 由插件自动放进 dsh-pet 的 runtime/electron-helper/ 目录，并在 index.html 末尾加载。
  * 它依赖下文列出的 dsh-pet 渲染端内部方法，并做能力检查，主要做三件事：
  *   1. 轮询本机回环的审批服务（127.0.0.1:49395–49400）；
- *   2. 在宠物头顶画一张小气泡卡片：「拒绝」/「允许一次」；
+ *   2. 在宠物头顶画一张小气泡卡片：普通「允许」/高风险「查看」；
  *   3. 让卡片区域能被点击（dsh-pet 的窗口默认点击穿透，交互区要显式上报）。
  *
  * 第 3 步通过包装 PetSprite 的三个原型方法完成（不修改 dsh-pet 源码）：
@@ -22,11 +22,15 @@
   var POLL_MS = 300
   var TIMEOUT_MS = 1500
   /** 卡片样式/文案版本：host 的 /health 里带同一个值，不一致就自动刷新窗口（改 UI 不用重启桌宠）。 */
-  var UI_VERSION = '13'
+  var UI_VERSION = '14'
 
   var port = null
   var discovering = null
   var card = null
+  var detail = null
+  var detailItem = null
+  var hoverTimer = null
+  var hideTimer = null
   var cardId = null
   var cardState = ''
   var seen = new Set()
@@ -143,7 +147,7 @@
   /* -------------------------------- 卡片 UI ------------------------------- */
 
   var CSS = [
-    /* v4 极简卡片：一句话 + 两个按钮，一排就够。
+    /* 极简卡片：一句话 + 一个按钮，完整请求仅在悬停时展开。
        —— 用户要求：只告诉我"有权限要批"，别摆细节；细节在对话框和 hover 提示里。
        位置贴头顶、允许压进身体一点（同 .pet-bubble 的 -.108），避免被窗口顶部裁掉。 */
     '.dpa-card{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(100% - var(--pet-size,462px) * .108);z-index:20;box-sizing:border-box;',
@@ -173,7 +177,12 @@
     '.dpa-view{background:#c2620f;color:#fff;}',
     /* 点过「查看」之后：卡片留在原地变灰，表示"决定权已经交回对话框"，不给人已批准的错觉 */
     '.dpa-card.is-viewed{background:#f2f3f5;color:#6b7078;box-shadow:0 2px 8px rgba(0,0,0,.12);}',
-    '.dpa-dots{font-size:.95em;opacity:.7;padding:0 .01em;}',
+    '.dpa-details{position:fixed;z-index:100;box-sizing:border-box;width:340px;padding:12px 14px;border-radius:12px;',
+    'background:#fff;color:#23262b;border:1px solid #d8dce3;box-shadow:0 4px 18px rgba(0,0,0,.2);',
+    'font:13px/1.5 "PingFang SC","Microsoft YaHei",sans-serif;pointer-events:auto;user-select:text;-webkit-user-select:text;overflow:auto;overscroll-behavior:contain;}',
+    '.dpa-details strong{display:block;margin-bottom:6px;white-space:pre-wrap;overflow-wrap:anywhere;}',
+    '.dpa-detail-reason{white-space:pre-wrap;overflow-wrap:anywhere;}',
+    '.dpa-detail-note{font-size:12px;color:#606875;margin-top:8px;}',
   ].join('')
 
   function injectStyle() {
@@ -192,13 +201,92 @@
     var rects = []
     if (!card) return rects
     var r = card.getBoundingClientRect()
-    if (r.width > 0 && r.height > 0) {
-      rects.push({ x: sc(r.x), y: sc(r.y), width: sc(r.width), height: sc(r.height) })
-    }
+    ;[r, detail && detail.getBoundingClientRect()].forEach(function (box) {
+      if (box && box.width > 0 && box.height > 0) {
+        rects.push({ x: sc(box.x), y: sc(box.y), width: sc(box.width), height: sc(box.height) })
+      }
+    })
     return rects
   }
 
+  // Custom tooltip stays inside the transparent helper window, including small pet sizes.
+  function cancelDetailTimers() {
+    if (hoverTimer !== null) clearTimeout(hoverTimer)
+    if (hideTimer !== null) clearTimeout(hideTimer)
+    hoverTimer = hideTimer = null
+  }
+
+  function hideDetails() {
+    cancelDetailTimers()
+    if (detail) detail.remove()
+    detail = null
+    if (card) card.removeAttribute('aria-describedby')
+    refreshSprites()
+  }
+
+  function placeDetails() {
+    if (!detail || !card) return
+    var width = Math.max(0, window.innerWidth - 16)
+    var height = Math.max(0, window.innerHeight - 16)
+    detail.style.width = Math.min(340, width) + 'px'
+    detail.style.maxHeight = Math.min(240, height) + 'px'
+    var anchor = card.getBoundingClientRect()
+    var box = detail.getBoundingClientRect()
+    var left = Math.max(8, Math.min(anchor.x + anchor.width / 2 - box.width / 2, window.innerWidth - box.width - 8))
+    var above = anchor.y - box.height - 4
+    var top = above >= 8 ? above : anchor.bottom + 4
+    top = Math.max(8, Math.min(top, window.innerHeight - box.height - 8))
+    detail.style.left = left + 'px'
+    detail.style.top = top + 'px'
+    refreshSprites()
+  }
+
+  function showDetails() {
+    cancelDetailTimers()
+    if (!card || !detailItem) return
+    if (!detail) {
+      detail = document.createElement('div')
+      detail.id = 'dpa-request-details'
+      detail.className = 'dpa-details'
+      detail.setAttribute('role', 'tooltip')
+      detail.addEventListener('mouseenter', cancelDetailTimers)
+      detail.addEventListener('mouseleave', scheduleHideDetails)
+      detail.addEventListener('pointerdown', function (e) { e.stopPropagation() })
+      detail.addEventListener('click', function (e) { e.stopPropagation() })
+      document.body.appendChild(detail)
+    }
+    detail.replaceChildren()
+    var heading = document.createElement('strong')
+    heading.textContent = '请求工具：' + (detailItem.toolName || '未提供')
+    var reason = document.createElement('div')
+    reason.className = 'dpa-detail-reason'
+    reason.textContent = detailItem.reason || '未提供具体请求说明，请回 DSH 查看后再决定。'
+    var note = document.createElement('div')
+    note.className = 'dpa-detail-note'
+    note.textContent = detailItem.risk === 'high'
+      ? '高风险请求：点击「查看」，回 DSH 手动决定。'
+      : '「允许」仅授权当前这一次请求。'
+    detail.appendChild(heading)
+    detail.appendChild(reason)
+    detail.appendChild(note)
+    card.setAttribute('aria-describedby', detail.id)
+    placeDetails()
+  }
+
+  function scheduleShowDetails() {
+    cancelDetailTimers()
+    if (detail) return
+    hoverTimer = setTimeout(showDetails, 300)
+  }
+
+  function scheduleHideDetails() {
+    cancelDetailTimers()
+    hideTimer = setTimeout(hideDetails, 180)
+  }
+
   function removeCard() {
+    hideDetails()
+    detailItem = null
     if (resizeObserver) {
       try {
         resizeObserver.disconnect()
@@ -225,6 +313,10 @@
       '<div class="dpa-actions">' +
       '<button type="button" class="dpa-btn dpa-allow" data-outcome="allowed-once">允许</button>' +
       '</div>'
+    el.addEventListener('mouseenter', scheduleShowDetails)
+    el.addEventListener('mouseleave', scheduleHideDetails)
+    el.addEventListener('focusin', showDetails)
+    el.addEventListener('focusout', scheduleHideDetails)
     el.addEventListener('pointerdown', function (e) {
       e.stopPropagation()
     })
@@ -253,32 +345,20 @@
     return el
   }
 
-  /** reason → 一行短句：去掉固定的"升级沙箱"前缀、压掉换行，太长就截断（细节留给对话框）。 */
-  function summarize(reason) {
-    var text = String(reason || '')
-      .replace(/\s+/g, ' ')
-      .trim()
-    if (!text) return '需要你的授权才能继续'
-    text = text
-      .replace(/^escalate (the )?sandbox to [a-z-]+\s*[:：]?\s*/i, '')
-      .replace(/^escalate (permission|approval)[^:：]*[:：]\s*/i, '')
-      .trim()
-    if (!text) return '需要你的授权才能继续'
-    return text.length > 46 ? text.slice(0, 45) + '…' : text
-  }
-
   function renderCard(item, more) {
     injectStyle()
     var el = ensureCard()
     if (!el) return
     /* 状态串：同一条审批从"待办"转成"已转去对话框"时也要重画，所以不能只看 id */
-    var state = item.id + '|' + (item.viewed ? 'v' : '') + '|' + more + '|' + (item.navigationStatus || 'idle')
+    var state = JSON.stringify([item.id, item.viewed, more, item.navigationStatus, item.risk, item.toolName, item.reason])
     if (state === cardState) return
     cardState = state
     /* 状态换了就是另一条审批/另一种形态：上一轮的"已提交"反馈必须复位，
        否则新卡片会出现按钮永远灰着的情况。 */
     clearBusy()
+    if (cardId !== item.id) hideDetails()
     cardId = item.id
+    detailItem = item
     var viewed = item.viewed === true
     var high = item.risk === 'high'
     el.classList.toggle('is-high', high)
@@ -304,8 +384,9 @@
             : '<button type="button" class="dpa-btn dpa-allow" data-outcome="allowed-once">允许</button>'
       }
     }
-    /* 细节不占视觉：鼠标悬停时在系统提示里看工具名和理由 */
-    el.title = (item.toolName || 'tool') + (item.reason ? ' · ' + String(item.reason) : '')
+    /* 不依赖透明窗口中不可靠的原生 title；只用 textContent 展示请求。 */
+    el.removeAttribute('title')
+    if (detail) showDetails()
     refreshSprites()
     reportSeen(item.id)
   }
@@ -372,6 +453,7 @@
 
   function answer(id, outcome, btn) {
     if (!id) return
+    hideDetails()
     markBusy(btn)
     var p = port
     if (p === null) {
@@ -410,6 +492,7 @@
 
   var flashTimer = null
   function flashSettled() {
+    hideDetails()
     if (!card) return
     var tipEl = card.querySelector('.dpa-tip')
     var actions = card.querySelector('.dpa-actions')
@@ -585,6 +668,9 @@
   }
 
   function start() {
+    window.addEventListener('resize', placeDetails)
+    window.addEventListener('blur', hideDetails)
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') hideDetails() })
     installHooks()
     injectStyle()
     tick()

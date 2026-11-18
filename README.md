@@ -2,9 +2,9 @@
 
 在其他窗口工作时，也能从常驻桌宠上处理 DSH 的权限请求：**普通请求点「允许」，高风险点「查看」回 DSH 手动审批。**
 
-**Jolyon · v0.4.0 · macOS · 非官方插件 · AI 辅助开发**
+**Jolyon · v1.0.0 · macOS · 非官方插件 · AI 辅助开发**
 
-[版本记录](./CHANGELOG.md) · [反馈问题](https://github.com/joesl3epy-cloud/dsh-pet-approval/issues) · [配套工具：隐藏侧栏时间](https://github.com/joesl3epy-cloud/dsh-hide-time)
+[下载 v1.0.0](https://github.com/joesl3epy-cloud/dsh-pet-approval/releases/tag/v1.0.0) · [版本记录](./CHANGELOG.md) · [反馈问题](https://github.com/joesl3epy-cloud/dsh-pet-approval/issues) · [配套工具：隐藏侧栏时间](https://github.com/joesl3epy-cloud/dsh-hide-time)
 
 ## 实际演示
 
@@ -42,9 +42,12 @@
 
 没有用户操作就不会由本插件自动批准。它不替代 DSH 自身的审批策略；风险分类为启发式规则，普通请求不等于已经证明安全。
 
+## 悬停详情
+
+**悬停查看本次请求。** 鼠标在审批气泡上停留约300毫秒，显示工具名与完整请求理由；移入详情可滚动阅读，移开收起，Escape关闭。内容来自宿主提供的工具名和理由，不额外读取文件，也不保证包含完整命令或所有权限参数。未提供理由时明确提示回DSH查看。浮层限制在桌宠窗口内，高风险仍只能点击“查看”。2026-11-18已由作者在Mac实机确认悬停展开生效；边缘定位与长文本等异常场景仍以隔离测试为主。
+
 ## 当前限制
 
-- **悬停查看具体请求尚未达到预期。** 代码设置了工具名和理由，但用户实际反馈提示未可靠显示；本版不把它列为可用功能。需要细节时回到 DSH 查看。
 - 查看通过 DSH 前端的 `uiWorkspace.openSession` 打开会话，并确认当前会话与窗口焦点；没有实现对某一审批卡片的精确滚动或高亮。
 - 只在 macOS 自用与演示验证。不同 DSH 版本、多窗口和特殊会话结构仍可能需要适配。
 - 依赖 dsh-pet 的渲染内部结构。插件启动时向其 helper 目录复制独立脚本并追加加载标签；上游升级后可能需要重放补丁和重新打开桌宠。
@@ -95,7 +98,7 @@ node "/Applications/DeepSeek Harness.app/Contents/Resources/runtime/primary-runt
 npm test
 ```
 
-本轮32项隔离测试通过，覆盖鉴权、高风险批准拦截、重复处理、取消、补丁、凭据恢复、单按钮与导航确认。真实使用视频补充了两条交互证据，但不能替代全部版本与异常场景验收。既往记录环境：DSH 0.2.1-rc.5、macOS Apple Silicon；本轮视频未另行核对宿主具体版本。
+本版36项隔离测试通过，覆盖鉴权、高风险批准拦截、重复处理、取消、补丁、凭据恢复、单按钮与导航确认。现有视频录制于0.4.0，不包含新悬停详情；它们补充了两条交互证据，但不能替代全部版本与异常场景验收。既往记录环境：DSH 0.2.1-rc.5、macOS Apple Silicon；本轮视频未另行核对宿主具体版本。
 
 ## 诊断与卸载
 

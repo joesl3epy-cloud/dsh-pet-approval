@@ -42,7 +42,7 @@ const { version: VERSION } = JSON.parse(fs.readFileSync(new URL('./package.json'
 /** 回环端口候选：渲染端按同样顺序探测。 */
 const PORTS = [49395, 49396, 49397, 49398, 49399, 49400]
 /** 卡片样式/文案版本：runtime/pet-approval.js 里的 UI_VERSION 必须与之一致，否则宠物窗口自动刷新。 */
-const UI_VERSION = '13'
+const UI_VERSION = '14'
 const OUTCOMES = new Set(['allowed-once', 'rejected', 'cancelled', 'unavailable'])
 
 /** 渲染端心跳窗口：超过这么久没轮询就认为桌宠不在线（只走 GUI）。

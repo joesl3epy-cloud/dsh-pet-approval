@@ -48,11 +48,11 @@ test('真实客户端入口只导航并确认，不触发授权；隐藏窗口�
  }
 })
 
-test('普通/高风险卡片各仅一个按钮，悬停保留完整请求，不把待导航当成功', () => {
+test('普通/高风险卡片各仅一个按钮，悬停数据保留完整请求，不把待导航当成功', () => {
  let definition
  const actions={attrs:{},getAttribute(k){return this.attrs[k]},setAttribute(k,v){this.attrs[k]=v},innerHTML:''}
  const tip={textContent:'',getAttribute(){return null}}
- const card={classList:{toggle(){},remove(){}},querySelector(s){return s==='.dpa-tip'?tip:s==='.dpa-actions'?actions:null},querySelectorAll(){return []},title:''}
+ const card={classList:{toggle(){},remove(){}},querySelector(s){return s==='.dpa-tip'?tip:s==='.dpa-actions'?actions:null},querySelectorAll(){return []},removeAttribute(){},title:''}
  const sandbox={console,document:{currentScript:{getAttribute(){return 'fixture'}},querySelector(){return null},getElementById(){return {}},head:{appendChild(){}}},setTimeout:()=>1,clearTimeout(){},window:{__ModuleLoader__:{load(d){definition=d}}}}
  let source=fs.readFileSync(new URL('../runtime/pet-approval.js',import.meta.url),'utf8')
  source=source.slice(0,source.lastIndexOf('  if (document.readyState'))+'globalThis.draw=function(item){card=globalThis.fixture;renderCard(item,0)};})()'
@@ -63,7 +63,7 @@ test('普通/高风险卡片各仅一个按钮，悬停保留完整请求，不�
  assert.equal((actions.innerHTML.match(/<button /g)||[]).length,1)
  assert.ok(actions.innerHTML.includes('allowed-once'))
  assert.ok(actions.innerHTML.includes('>允许</button>'))
- assert.ok(card.title.includes(reason))
+ assert.equal(card.title,'')
  sandbox.draw({id:'two',risk:'high',navigationStatus:'pending'})
  assert.equal((actions.innerHTML.match(/<button /g)||[]).length,1)
  assert.ok(actions.innerHTML.includes('data-outcome="view"'))
