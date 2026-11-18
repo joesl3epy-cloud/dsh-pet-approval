@@ -1,4 +1,4 @@
-# dsh-pet-approval · 极简桌宠审批
+# Pet Approval｜桌宠审批
 
 在其他窗口工作时，也能从常驻桌宠上处理 DSH 的权限请求：**普通请求点「允许」，高风险点「查看」回 DSH 手动审批。**
 
@@ -111,3 +111,7 @@ npm test
 基础桌宠来自 [PC2005-cloud/dsh-pet](https://github.com/PC2005-cloud/dsh-pet)。本项目扩展其审批交互，基础桌宠的版权归原作者。DSH 的会话导航能力来自宿主，本插件不依赖 Session Manager。
 
 本项目采用 [MIT](./LICENSE)。这是非官方扩展，与 DeepSeek、DSH 和 dsh-pet 的维护者没有隶属关系。
+
+## 开发约定
+
+见 [极简插件开发 Prompt](./DEVELOPMENT.md)。公开版本使用1.0、1.1、2.0：宿主升级的兼容更新增加后位，重大功能迭代增加前位，开发中小修不逐次涨号。

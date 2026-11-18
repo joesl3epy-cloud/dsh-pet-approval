@@ -1,7 +1,7 @@
 {
   "name": "dsh-pet-approval",
   "version": "1.0.0",
-  "description": "在桌宠中允许一次普通请求，高风险请求跳转DSH手动审批",
+  "description": "Pet Approval｜桌宠审批：在桌宠中允许一次普通请求，高风险请求跳转DSH手动审批",
   "type": "module",
   "main": "index.js",
   "exports": {
@@ -23,7 +23,8 @@
     "README.md",
     "navigation.mjs",
     "lib/",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "DEVELOPMENT.md"
   ],
   "scripts": {
     "test": "node --test test/*.test.mjs",
